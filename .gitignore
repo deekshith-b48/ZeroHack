@@ -1,8 +1,0 @@
-# Ignore dataset files except .pkl files
-IDS_dataset/*
-!IDS_dataset/**/*.pkl
-# Ignore dataset files except .pkl files
-IDS_dataset/*
-!IDS_dataset/**/*.pkl
-!IDS_dataset/**/*_test.pkl
-!IDS_dataset/**/*_train.pkl
