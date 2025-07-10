@@ -1,39 +1,55 @@
-# Base image for development dependencies
-FROM oven/bun:1 AS base
+# Stage 1: Builder
+FROM oven/bun:1 AS builder
 
-# No need for pnpm installation since we'll use bun
-
-# Install common dependencies that are likely to be used in Next.js projects
-FROM base AS deps
+LABEL stage="builder"
 WORKDIR /app
 
-# Copy only package files for efficient caching
-COPY . .
+# Copy application code first
+# This ensures that package.json, bun.lockb, next.config.js, etc., within zerohack/ are all copied
+COPY zerohack ./zerohack
 
-# Install dependencies
-RUN bun install
+# Set workdir to the app subfolder where package.json is located
+WORKDIR /app/zerohack
 
-# Install git and configure it
-RUN apt-get update -y && apt-get install -y git && \
-    cd /app && \
-    git init && \
-    git config --system --add safe.directory /app && \
-    git config --system user.name "creatr-agent" && \
-    git config --system user.email "creatr-agent@getcreatr.com" && \
-    git add . && \
-    git commit -m "Initial Commit"
+# Install dependencies using bun within the app subfolder
+# This will create node_modules inside /app/zerohack/
+RUN bun install --frozen-lockfile
 
-# Create a separate stage for exporting
-FROM alpine:latest AS export-stage
+# Build the Next.js application
+# This uses scripts from /app/zerohack/package.json
+RUN bun run build
 
-# Create tar archive of the source code (excluding node_modules)
-COPY --from=deps /app /source
-RUN cd /source && \
-    tar -czf /source.tar.gz --exclude=node_modules .
+# Stage 2: Runner
+FROM oven/bun:1 AS runner
 
-# Copy node_modules to a separate location for volume mounting
-COPY --from=deps /app/node_modules /deps/node_modules
+LABEL stage="runner"
+WORKDIR /app/zerohack
 
-# Clean up the source directory and extract the tar
-RUN rm -rf /source/* && \
-    mv /source.tar.gz /source/
+# Create a non-root user for security
+# Done as root before switching user
+RUN groupadd --system --gid 1001 nodejs && \
+    useradd --system --uid 1001 --gid nodejs --shell /bin/bash --create-home nodejs
+
+# Copy necessary files from builder stage, setting ownership to the new user
+# Copy built app artifacts
+COPY --chown=nodejs:nodejs --from=builder /app/zerohack/.next ./.next
+COPY --chown=nodejs:nodejs --from=builder /app/zerohack/public ./public
+
+# Copy runtime dependencies definitions and config
+COPY --chown=nodejs:nodejs --from=builder /app/zerohack/package.json ./package.json
+COPY --chown=nodejs:nodejs --from=builder /app/zerohack/bun.lockb ./bun.lockb
+COPY --chown=nodejs:nodejs --from=builder /app/zerohack/next.config.js ./next.config.js
+
+# Switch to non-root user
+USER nodejs
+
+# Install only production dependencies based on the copied package.json and bun.lockb
+# Bun automatically prunes devDependencies when NODE_ENV=production
+ENV NODE_ENV=production
+RUN bun install --frozen-lockfile --production
+
+ENV PORT=3000
+EXPOSE 3000
+
+# Start the Next.js application using the start script from package.json
+CMD ["bun", "run", "start"]
