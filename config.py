@@ -63,6 +63,19 @@ logging.basicConfig(
     ]
 )
 
+# --- Aggregator Settings (can be moved to aggregator.py if preferred, but useful for detector consistency) ---
+class Aggregator: # Using a class for namespacing settings
+    AI_SCORE_THRESHOLD_IF = -0.1  # Example: Isolation Forest scores below this are more anomalous
+    AI_SCORE_THRESHOLD_AE_LSTM = 0.7 # Example: Normalized MSE above this is more anomalous for Aggregator's final decision
+    # (These would be used by individual detectors to determine their 'verdict' if not just raw scores)
+
+# --- Detector-specific settings (can be overridden in detector instantiation) ---
+# Threshold for Autoencoder/LSTM to determine its own 'anomaly' verdict based on MSE percentile of a given batch
+# This is used if a fixed, pre-calculated MSE threshold isn't available for the detector.
+# A fixed threshold (determined from validation on normal data) is generally preferred.
+DETECTOR_DYNAMIC_THRESHOLD_PERCENTILE = 90
+
+
 def get_logger(name):
     return logging.getLogger(name)
 

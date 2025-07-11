@@ -252,5 +252,141 @@ def main():
 
     logger.info("LSTM training and testing script finished.")
 
+
+class LSTMDETector:
+    def __init__(self, model_path=config.LSTM_MODEL_PATH, scaler_path=config.LSTM_SCALER_PATH,
+                 timesteps=TIMESTEPS, threshold_percentile=None):
+        self.model_path = model_path
+        self.scaler_path = scaler_path
+        self.timesteps = timesteps
+        self.model = None
+        self.scaler = None
+        self.threshold = None # Actual MSE value threshold
+        self._load_model_and_scaler()
+
+        if threshold_percentile is not None:
+            logger.warning("LSTMDETector: threshold_percentile for dynamic calculation is provided. "
+                           "A fixed, pre-calculated MSE threshold is generally preferred.")
+            self.threshold_percentile_dynamic = threshold_percentile
+        else:
+            self.threshold_percentile_dynamic = config.DETECTOR_DYNAMIC_THRESHOLD_PERCENTILE
+            logger.info(f"LSTM Detector: Defaulting to dynamic threshold calculation at {self.threshold_percentile_dynamic}th percentile if not set otherwise.")
+
+
+    def _load_model_and_scaler(self):
+        if not os.path.exists(self.model_path) or not os.path.exists(self.scaler_path):
+            logger.error(f"LSTM Detector: Model ({self.model_path}) or scaler ({self.scaler_path}) not found.")
+            return
+        try:
+            self.model = tf.keras.models.load_model(self.model_path)
+            self.scaler = joblib.load(self.scaler_path)
+            logger.info(f"LSTM Detector: Model and scaler loaded successfully from {self.model_path} and {self.scaler_path}")
+            # Potentially load a pre-calculated MSE threshold here too
+            # e.g., self.threshold = joblib.load(os.path.join(config.MODELS_DIR, "lstm_mse_threshold.pkl"))
+        except Exception as e:
+            logger.error(f"LSTM Detector: Error loading model, scaler, or threshold: {e}")
+            self.model = None
+            self.scaler = None
+
+    def set_mse_threshold(self, threshold_value):
+        """Allows setting a pre-calculated MSE threshold."""
+        self.threshold = threshold_value
+        logger.info(f"LSTM Detector: MSE threshold explicitly set to {self.threshold:.6f}")
+
+    def predict(self, data_df_numeric):
+        """
+        Predicts anomalies using the loaded LSTM model by calculating reconstruction MSE on sequences.
+
+        Args:
+            data_df_numeric (pd.DataFrame): DataFrame with only numeric features, preprocessed (NaNs handled).
+                                         NOT YET SCALED.
+
+        Returns:
+            dict: {'verdict': 'normal'/'anomaly', 'score': mse_value (float), 'explanation': str, 'model_type': 'LSTM'}
+        """
+        if self.model is None or self.scaler is None:
+            logger.error("LSTM Detector: Model or scaler not loaded.")
+            return {"verdict": "error", "score": 0.0, "explanation": "LSTM Model/scaler not loaded.", "model_type": "LSTM"}
+
+        if data_df_numeric.empty:
+            logger.warning("LSTM Detector: Input data is empty.")
+            return {"verdict": "error", "score": 0.0, "explanation": "Input data is empty.", "model_type": "LSTM"}
+
+        try:
+            X_values = data_df_numeric.values
+            X_scaled = self.scaler.transform(X_values)
+        except Exception as e:
+            logger.error(f"LSTM Detector: Error scaling input data: {e}")
+            return {"verdict": "error", "score": 0.0, "explanation": f"Error scaling input data: {e}", "model_type": "LSTM"}
+
+        X_seq = reshape_sequences(X_scaled, timesteps=self.timesteps) # Uses existing reshape_sequences function
+        if X_seq is None or X_seq.shape[0] == 0: # Check if any sequences were formed
+            logger.warning("LSTM Detector: Not enough data to form sequences after scaling, or reshaping failed.")
+            return {"verdict": "error", "score": 0.0, "explanation": "Not enough data for sequences or reshaping error.", "model_type": "LSTM"}
+
+        try:
+            reconstructions = self.model.predict(X_seq)
+            mse_per_sequence = np.mean(np.square(X_seq - reconstructions), axis=(1,2))
+            avg_mse = np.mean(mse_per_sequence)
+
+            current_threshold = self.threshold
+            dynamic_threshold_used = False
+            if current_threshold is None:
+                current_threshold = np.percentile(mse_per_sequence, self.threshold_percentile_dynamic)
+                dynamic_threshold_used = True
+                logger.warning(f"LSTM Detector: No fixed MSE threshold set. Dynamically calculated threshold for this batch: {current_threshold:.6f} ({self.threshold_percentile_dynamic}th percentile).")
+
+            verdict = "anomaly" if avg_mse > current_threshold else "normal"
+
+            explanation = (f"LSTM average sequence MSE: {avg_mse:.6f}. "
+                           f"Threshold: {current_threshold:.6f}{' (dynamic)' if dynamic_threshold_used else ' (fixed)'}. ")
+            if verdict == "anomaly":
+                explanation += "MSE exceeds threshold, indicating potential anomaly in temporal patterns."
+            else:
+                explanation += "MSE within threshold, indicating normal temporal patterns."
+
+            return {"verdict": verdict, "score": float(avg_mse), "explanation": explanation, "model_type": "LSTM", "mse_values_per_sequence": mse_per_sequence.tolist()}
+        except Exception as e:
+            logger.error(f"LSTM Detector: Error during prediction: {e}")
+            return {"verdict": "error", "score": 0.0, "explanation": f"Error during prediction: {e}", "model_type": "LSTM"}
+
+
 if __name__ == "__main__":
-    main()
+    main() # Original main for training/testing the script
+
+    # Example of using the detector class
+    print("\n--- Testing LSTMDETector Class ---")
+    lstm_detector = LSTMDETector()
+    # Optionally set a fixed threshold:
+    # lstm_detector.set_mse_threshold(0.03) # Example
+
+    if lstm_detector.model and lstm_detector.scaler:
+        try:
+            num_features = lstm_detector.scaler.n_features_in_
+            print(f"LSTM Detector expects {num_features} features per timestep.")
+
+            # Create dummy data for at least `timesteps` samples
+            # e.g., 2 sequences of `timesteps` length
+            num_samples_normal = lstm_detector.timesteps * 2
+            dummy_data_normal = pd.DataFrame(np.random.rand(num_samples_normal, num_features) * 0.7)
+
+            num_samples_anomaly = lstm_detector.timesteps
+            dummy_data_anomaly_vals = np.random.rand(num_samples_anomaly, num_features)
+            dummy_data_anomaly_vals[:, :num_features//2] *= 2.5 # Make some features anomalous
+            dummy_data_anomaly = pd.DataFrame(dummy_data_anomaly_vals)
+
+
+            print("Predicting on likely normal sequential data:")
+            result_normal = lstm_detector.predict(dummy_data_normal)
+            print(result_normal)
+
+            print("\nPredicting on likely anomalous sequential data:")
+            result_anomaly = lstm_detector.predict(dummy_data_anomaly)
+            print(result_anomaly)
+
+        except AttributeError:
+            print("Could not determine number of features from loaded scaler (scaler.n_features_in_ missing or scaler not loaded).")
+        except Exception as e:
+            print(f"Error during LSTM Detector class test: {e}")
+    else:
+        print("LSTM Detector class could not load model/scaler, skipping class test.")
