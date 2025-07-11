@@ -3,3 +3,9 @@ numpy
 scikit-learn
 tensorflow
 joblib
+fastapi
+uvicorn[standard] # For running the server
+python-dotenv # For .env file support in blockchain_logger etc.
+web3 # For blockchain interaction
+ipfshttpclient # For IPFS interaction
+httpx # For asynchronous HTTP requests in stress tester

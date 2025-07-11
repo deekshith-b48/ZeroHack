@@ -206,5 +206,137 @@ def main():
 
     logger.info("Autoencoder training and testing script finished.")
 
+
+class AutoencoderDetector:
+    def __init__(self, model_path=config.AE_MODEL_PATH, scaler_path=config.AE_SCALER_PATH, threshold_percentile=None):
+        self.model_path = model_path
+        self.scaler_path = scaler_path
+        self.model = None
+        self.scaler = None
+        self.threshold = None # This will be the actual MSE value threshold
+        self._load_model_and_scaler()
+
+        if threshold_percentile is not None:
+            logger.warning("AutoencoderDetector: threshold_percentile passed to constructor is for dynamic calculation "
+                           "on predict data if threshold is not pre-set. "
+                           "A fixed, pre-calculated threshold is generally preferred for consistent detection.")
+            self.threshold_percentile_dynamic = threshold_percentile
+        else:
+            # Use the configured threshold from aggregator settings as a default for verdict if not pre-calculated
+            # This is a simplification; ideally, the AE threshold is learned from reconstruction errors on normal validation data
+            # and saved/loaded, or the predict method needs a way to access a validation set's MSEs.
+            # For now, we'll make the `predict` method capable of calculating it dynamically if not set.
+            self.threshold_percentile_dynamic = config.ANOMALY_THRESHOLD_PERCENTILE # from autoencoder_test.py
+            # A better approach would be to store the actual MSE threshold value, possibly in config or with the model.
+            # Let's assume for now that the 'score' from this detector is the MSE, and the aggregator
+            # will use its own logic (like AI_SCORE_THRESHOLD_AE_LSTM) to interpret it.
+            # The detector itself can still determine a simple 'anomaly'/'normal' verdict based on a dynamic threshold if needed.
+            logger.info(f"AE Detector: Defaulting to dynamic threshold calculation at {self.threshold_percentile_dynamic}th percentile if not set otherwise.")
+
+
+    def _load_model_and_scaler(self):
+        if not os.path.exists(self.model_path) or not os.path.exists(self.scaler_path):
+            logger.error(f"AE Detector: Model ({self.model_path}) or scaler ({self.scaler_path}) not found.")
+            return
+        try:
+            self.model = tf.keras.models.load_model(self.model_path)
+            self.scaler = joblib.load(self.scaler_path)
+            logger.info(f"AE Detector: Model and scaler loaded successfully from {self.model_path} and {self.scaler_path}")
+            # Here, you might also load a pre-calculated MSE threshold if it was saved during training.
+            # e.g., self.threshold = joblib.load(os.path.join(config.MODELS_DIR, "ae_mse_threshold.pkl"))
+        except Exception as e:
+            logger.error(f"AE Detector: Error loading model, scaler, or threshold: {e}")
+            self.model = None
+            self.scaler = None
+
+    def set_mse_threshold(self, threshold_value):
+        """Allows setting a pre-calculated MSE threshold."""
+        self.threshold = threshold_value
+        logger.info(f"AE Detector: MSE threshold explicitly set to {self.threshold:.6f}")
+
+    def predict(self, data_df_numeric):
+        """
+        Predicts anomalies using the loaded Autoencoder model by calculating reconstruction MSE.
+
+        Args:
+            data_df_numeric (pd.DataFrame): DataFrame with only numeric features, already preprocessed (NaNs handled).
+                                         This data should NOT be scaled yet.
+
+        Returns:
+            dict: {'verdict': 'normal'/'anomaly', 'score': mse_value (float), 'explanation': str, 'model_type': 'Autoencoder'}
+        """
+        if self.model is None or self.scaler is None:
+            logger.error("AE Detector: Model or scaler not loaded. Cannot predict.")
+            return {"verdict": "error", "score": 0.0, "explanation": "AE Model/scaler not loaded.", "model_type": "Autoencoder"}
+
+        if data_df_numeric.empty:
+            logger.warning("AE Detector: Input data is empty.")
+            return {"verdict": "error", "score": 0.0, "explanation": "Input data is empty.", "model_type": "Autoencoder"}
+
+        try:
+            X_values = data_df_numeric.values
+            X_scaled = self.scaler.transform(X_values)
+        except Exception as e:
+            logger.error(f"AE Detector: Error scaling input data: {e}")
+            return {"verdict": "error", "score": 0.0, "explanation": f"Error scaling input data: {e}", "model_type": "Autoencoder"}
+
+        try:
+            reconstructions = self.model.predict(X_scaled)
+            mse_per_sample = np.mean(np.square(X_scaled - reconstructions), axis=1)
+            avg_mse = np.mean(mse_per_sample) # Average MSE for the batch
+
+            current_threshold = self.threshold
+            dynamic_threshold_used = False
+            if current_threshold is None: # If no fixed threshold is set, calculate dynamically for this batch
+                current_threshold = np.percentile(mse_per_sample, self.threshold_percentile_dynamic)
+                dynamic_threshold_used = True
+                logger.warning(f"AE Detector: No fixed MSE threshold set. Dynamically calculated threshold for this batch: {current_threshold:.6f} ({self.threshold_percentile_dynamic}th percentile).")
+
+            verdict = "anomaly" if avg_mse > current_threshold else "normal"
+
+            explanation = (f"Autoencoder average MSE: {avg_mse:.6f}. "
+                           f"Threshold: {current_threshold:.6f}{' (dynamic)' if dynamic_threshold_used else ' (fixed)'}. ")
+            if verdict == "anomaly":
+                explanation += "MSE exceeds threshold, indicating potential anomaly."
+            else:
+                explanation += "MSE within threshold, indicating normal behavior."
+
+            return {"verdict": verdict, "score": float(avg_mse), "explanation": explanation, "model_type": "Autoencoder", "mse_values": mse_per_sample.tolist()}
+        except Exception as e:
+            logger.error(f"AE Detector: Error during prediction: {e}")
+            return {"verdict": "error", "score": 0.0, "explanation": f"Error during prediction: {e}", "model_type": "Autoencoder"}
+
 if __name__ == "__main__":
-    main()
+    main() # Keep original main for training
+
+    # Example of using the detector class
+    print("\n--- Testing AutoencoderDetector Class ---")
+    # This assumes a model and scaler have been trained and saved by running main() first.
+    # Or, point to existing model/scaler if available.
+    ae_detector = AutoencoderDetector()
+    # Optionally set a fixed threshold if known from validation:
+    # ae_detector.set_mse_threshold(0.05) # Example fixed threshold
+
+    if ae_detector.model and ae_detector.scaler:
+        try:
+            num_features = ae_detector.scaler.n_features_in_
+            print(f"AE Detector expects {num_features} features.")
+
+            # Create some dummy numeric data (unscaled)
+            dummy_data_normal = pd.DataFrame(np.random.rand(5, num_features) * 0.8) # Should have low MSE
+            dummy_data_anomaly = pd.DataFrame(np.random.rand(2, num_features) * 1.5 - 0.2) # Some values out of typical scaled range
+
+            print("Predicting on likely normal data:")
+            result_normal = ae_detector.predict(dummy_data_normal)
+            print(result_normal)
+
+            print("\nPredicting on likely anomalous data:")
+            result_anomaly = ae_detector.predict(dummy_data_anomaly)
+            print(result_anomaly)
+
+        except AttributeError:
+            print("Could not determine number of features from loaded scaler (scaler.n_features_in_ missing or scaler not loaded).")
+        except Exception as e:
+            print(f"Error during AE Detector class test: {e}")
+    else:
+        print("AE Detector class could not load model/scaler, skipping class test.")

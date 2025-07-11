@@ -207,5 +207,113 @@ def main():
 
     logger.info("Isolation Forest script execution finished.")
 
+
+class IsolationForestDetector:
+    def __init__(self, model_path=config.IF_MODEL_PATH, scaler_path=config.IF_SCALER_PATH):
+        self.model_path = model_path
+        self.scaler_path = scaler_path
+        self.model = None
+        self.scaler = None
+        self._load_model()
+
+    def _load_model(self):
+        if not os.path.exists(self.model_path) or not os.path.exists(self.scaler_path):
+            logger.error(f"IF Detector: Model ({self.model_path}) or scaler ({self.scaler_path}) not found.")
+            # Allow initialization, but predict will fail or return error
+            return
+        try:
+            self.model = joblib.load(self.model_path)
+            self.scaler = joblib.load(self.scaler_path)
+            logger.info(f"IF Detector: Model and scaler loaded successfully from {self.model_path} and {self.scaler_path}")
+        except Exception as e:
+            logger.error(f"IF Detector: Error loading model or scaler: {e}")
+            self.model = None # Ensure model is None if loading failed
+            self.scaler = None
+
+    def predict(self, data_df_numeric):
+        """
+        Predicts anomalies using the loaded Isolation Forest model.
+
+        Args:
+            data_df_numeric (pd.DataFrame): DataFrame with only numeric features, already preprocessed (e.g. NaNs handled).
+                                         This data should NOT be scaled yet. The detector's scaler will be used.
+
+        Returns:
+            dict: {'verdict': 'normal'/'anomaly', 'score': float, 'explanation': str}
+                  Returns None or error dict if model/scaler not loaded or prediction fails.
+        """
+        if self.model is None or self.scaler is None:
+            logger.error("IF Detector: Model or scaler not loaded. Cannot predict.")
+            return {"verdict": "error", "score": 0.0, "explanation": "Model/scaler not loaded."}
+
+        if data_df_numeric.empty:
+            logger.warning("IF Detector: Input data is empty. Cannot predict.")
+            return {"verdict": "error", "score": 0.0, "explanation": "Input data is empty."}
+
+        try:
+            X_values = data_df_numeric.values
+            X_scaled = self.scaler.transform(X_values)
+        except Exception as e:
+            logger.error(f"IF Detector: Error scaling input data: {e}")
+            return {"verdict": "error", "score": 0.0, "explanation": f"Error scaling input data: {e}"}
+
+        try:
+            # decision_function: lower scores are more anomalous. Negative scores are outliers.
+            # predict: returns -1 for outliers and 1 for inliers.
+            scores = self.model.decision_function(X_scaled) # Average anomaly score for the batch
+            predictions = self.model.predict(X_scaled) # Individual predictions
+
+            # For a batch, we might average the score or take the most anomalous one.
+            # Here, let's consider the average score.
+            avg_score = np.mean(scores)
+
+            # Determine overall verdict for the batch. If any prediction is -1, consider it an anomaly.
+            # Or, base it on the avg_score. Let's use avg_score for now.
+            # (This might need refinement based on how batch results are interpreted by aggregator)
+            verdict = "anomaly" if avg_score < config.Aggregator.AI_SCORE_THRESHOLD_IF else "normal" # Using example threshold
+            # A more robust way for batch:
+            # num_anomalies = np.sum(predictions == -1)
+            # verdict = "anomaly" if num_anomalies > 0 else "normal"
+
+            explanation = f"Isolation Forest average score: {avg_score:.4f}. "
+            if verdict == "anomaly":
+                explanation += f"Score is below threshold ({config.Aggregator.AI_SCORE_THRESHOLD_IF}), indicating potential anomaly."
+            else:
+                explanation += "Score is above threshold, indicating normal behavior."
+
+            return {"verdict": verdict, "score": float(avg_score), "explanation": explanation, "raw_predictions": predictions.tolist()}
+        except Exception as e:
+            logger.error(f"IF Detector: Error during prediction: {e}")
+            return {"verdict": "error", "score": 0.0, "explanation": f"Error during prediction: {e}"}
+
 if __name__ == "__main__":
+    # Keep the original main function for standalone training and testing of the script
     main()
+
+    # Example of using the detector class (assuming model/scaler exist)
+    print("\n--- Testing IsolationForestDetector Class ---")
+    detector = IsolationForestDetector()
+    if detector.model and detector.scaler:
+        # Create some dummy numeric data (unscaled)
+        # Number of features should match what the scaler expects
+        try:
+            num_features = detector.scaler.n_features_in_
+            print(f"Detector expects {num_features} features.")
+            # Example: 2 samples, num_features features
+            dummy_data_ok = pd.DataFrame(np.random.rand(2, num_features) * 0.5) # Likely normal
+            dummy_data_anomaly = pd.DataFrame(np.random.rand(1, num_features) * 2 - 0.5 ) # Likely anomalous features
+
+            print("Predicting on likely normal data:")
+            result_ok = detector.predict(dummy_data_ok)
+            print(result_ok)
+
+            print("\nPredicting on likely anomalous data:")
+            result_anomaly = detector.predict(dummy_data_anomaly)
+            print(result_anomaly)
+
+        except AttributeError:
+             print("Could not determine number of features from loaded scaler (scaler.n_features_in_ missing or scaler not loaded).")
+        except Exception as e:
+            print(f"Error during detector class test: {e}")
+    else:
+        print("IF Detector class could not load model/scaler, skipping class test.")
