@@ -9,7 +9,7 @@ from autoencoder_train_test import AutoencoderDetector
 from lstm_train_test import LSTMDETector
 from signature_engine import SignatureEngine
 from aggregator import Aggregator
-from backend.blockchain_logger import log_incident_to_blockchain
+from backend.blockchain_response_engine import report_incident as report_incident_to_chain
 from backend.ipfs_uploader import upload_incident_details_to_ipfs
 from backend.incident_db import add_incident as add_incident_to_db, init_db as init_incident_db # Import DB functions
 
@@ -184,27 +184,37 @@ class ThreatDetectorPipeline:
             logger.warning("Failed to upload incident details to IPFS. Proceeding with blockchain log without IPFS hash.")
         logger.debug(f"[TIMER] IPFS Upload: {ipfs_upload_end_time - ipfs_upload_start_time:.4f}s")
 
-        # --- Blockchain Logging ---
+        # --- Blockchain Response Engine Trigger ---
         blockchain_log_start_time = time.perf_counter()
         try:
-            logger.info(f"Attempting to log incident to blockchain: IP {source_ip}, Type {attack_type}, Timestamp {event_timestamp}, IPFS: {ipfs_hash_for_bc}")
-            tx_hash = log_incident_to_blockchain(
-                source_ip=str(source_ip),
-                timestamp=str(event_timestamp),
+            # The new reportIncident function in the ABI takes: ip, attackType, explanation
+            # We can include the IPFS hash within the explanation string.
+            full_explanation = f"{bc_explanation} | IPFS Details: {ipfs_hash_for_bc if ipfs_hash_for_bc else 'N/A'}"
+
+            logger.info(f"Attempting to report incident via Response Engine: IP {source_ip}, Type {attack_type}")
+
+            receipt = report_incident_to_chain(
+                ip=str(source_ip),
                 attack_type=str(attack_type),
-                explanation=str(bc_explanation),
-                ipfs_hash=str(ipfs_hash_for_bc)
+                explanation=full_explanation[:1000] # Truncate to avoid overly large strings
             )
-            if tx_hash:
-                logger.info(f"Successfully logged threat to blockchain. Transaction Hash: {tx_hash}")
-                threat_data['blockchain_tx_hash'] = tx_hash
+
+            if receipt:
+                tx_hash = receipt.get('transactionHash')
+                if tx_hash:
+                    # Convert bytes to hex string if it's not already
+                    tx_hash_hex = tx_hash if isinstance(tx_hash, str) else tx_hash.hex()
+                    logger.info(f"Successfully triggered response contract. Transaction Hash: {tx_hash_hex}")
+                    threat_data['blockchain_tx_hash'] = tx_hash_hex
+                else:
+                    logger.warning("Response contract transaction successful, but tx hash not found in receipt.")
             else:
-                logger.error("Failed to log threat to blockchain (log_incident_to_blockchain returned None).")
+                logger.error("Failed to trigger response contract (report_incident_to_chain returned None).")
 
         except Exception as e:
-            logger.error(f"Error during blockchain logging preparation or call: {e}", exc_info=True)
+            logger.error(f"Error during blockchain response engine trigger: {e}", exc_info=True)
         blockchain_log_end_time = time.perf_counter()
-        logger.debug(f"[TIMER] Blockchain Logging: {blockchain_log_end_time - blockchain_log_start_time:.4f}s")
+        logger.debug(f"[TIMER] Blockchain Response Engine Trigger: {blockchain_log_end_time - blockchain_log_start_time:.4f}s")
 
         # --- Log to Local Incident DB ---
         local_db_log_start_time = time.perf_counter()
