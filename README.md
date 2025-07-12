@@ -22,6 +22,17 @@ ZeroHack addresses today’s cyberattack landscape through:
 - **Immutable Logging:** Stores verified threat incidents on blockchain (Ethereum/Hyperledger) for tamper-proof audit trails.
 - **Smart Contracts:** Automate response actions such as IP quarantine and incident logging.
 
+![Screenshot_20250518_100751.png](https://raw.githubusercontent.com/deekshith-b48/ZeroHack/be9c1391ed087c0eb9a4b7d2ac822b915f66475b/screenshots/Screenshot_20250518_100751.png)
+![Screenshot_20250518_101018.png](https://raw.githubusercontent.com/deekshith-b48/ZeroHack/be9c1391ed087c0eb9a4b7d2ac822b915f66475b/screenshots/Screenshot_20250518_101018.png)
+![Screenshot_20250518_101908.png](https://raw.githubusercontent.com/deekshith-b48/ZeroHack/be9c1391ed087c0eb9a4b7d2ac822b915f66475b/screenshots/Screenshot_20250518_101908.png)
+![Screenshot_20250518_102001.png](https://raw.githubusercontent.com/deekshith-b48/ZeroHack/be9c1391ed087c0eb9a4b7d2ac822b915f66475b/screenshots/Screenshot_20250518_102001.png)
+![Screenshot_20250518_102035.png](https://raw.githubusercontent.com/deekshith-b48/ZeroHack/be9c1391ed087c0eb9a4b7d2ac822b915f66475b/screenshots/Screenshot_20250518_102035.png)
+![Screenshot_20250518_102157.png](https://raw.githubusercontent.com/deekshith-b48/ZeroHack/be9c1391ed087c0eb9a4b7d2ac822b915f66475b/screenshots/Screenshot_20250518_102157.png)
+![Screenshot_20250518_102312.png](https://raw.githubusercontent.com/deekshith-b48/ZeroHack/be9c1391ed087c0eb9a4b7d2ac822b915f66475b/screenshots/Screenshot_20250518_102312.png)
+![Screenshot_20250518_102443.png](https://raw.githubusercontent.com/deekshith-b48/ZeroHack/be9c1391ed087c0eb9a4b7d2ac822b915f66475b/screenshots/Screenshot_20250518_102443.png)
+![Screenshot_20250518_102529.png](https://raw.githubusercontent.com/deekshith-b48/ZeroHack/be9c1391ed087c0eb9a4b7d2ac822b915f66475b/screenshots/Screenshot_20250518_102529.png)
+![Screenshot_20250518_102555.png](https://raw.githubusercontent.com/deekshith-b48/ZeroHack/be9c1391ed087c0eb9a4b7d2ac822b915f66475b/screenshots/Screenshot_20250518_102555.png)
+
 ---
 
 ## 🔁 Implementation Flow
