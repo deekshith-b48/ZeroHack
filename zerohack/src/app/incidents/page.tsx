@@ -17,7 +17,9 @@ interface Incident {
 
 // Configuration for API endpoint and refresh interval
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8008'; // FastAPI backend
+const WS_BASE_URL = API_BASE_URL.replace(/^http/, 'ws');
 const INCIDENTS_ENDPOINT = `${API_BASE_URL}/api/incidents`;
+const ALERTS_WEBSOCKET_ENDPOINT = `${WS_BASE_URL}/ws/alerts`;
 const REFRESH_INTERVAL_MS = 30000; // 30 seconds
 
 const IncidentsPage = () => {
@@ -25,6 +27,7 @@ const IncidentsPage = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [wsStatus, setWsStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
 
   const fetchIncidents = async () => {
     // For the initial load, don't clear incidents immediately, only if successful
@@ -60,7 +63,48 @@ const IncidentsPage = () => {
     fetchIncidents(); // Initial fetch
 
     const intervalId = setInterval(fetchIncidents, REFRESH_INTERVAL_MS);
-    return () => clearInterval(intervalId); // Cleanup interval on component unmount
+
+    // --- WebSocket Connection ---
+    console.log("Attempting to connect to WebSocket at:", ALERTS_WEBSOCKET_ENDPOINT);
+    const ws = new WebSocket(ALERTS_WEBSOCKET_ENDPOINT);
+
+    ws.onopen = () => {
+      console.log("WebSocket connection established.");
+      setWsStatus('connected');
+    };
+
+    ws.onmessage = (event) => {
+      console.log("WebSocket message received:", event.data);
+      // Assuming the message is a JSON string with event details
+      try {
+        const messageData = JSON.parse(event.data);
+        // You can add a toast notification here
+        console.log(`Real-time alert: ${messageData.event_type}`, messageData.data);
+
+        // Trigger a refresh of the incident list to show the new data
+        fetchIncidents();
+      } catch (e) {
+        console.error("Failed to parse WebSocket message:", e);
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error("WebSocket error:", error);
+      setWsStatus('disconnected');
+    };
+
+    ws.onclose = () => {
+      console.log("WebSocket connection closed.");
+      setWsStatus('disconnected');
+    };
+
+    // Cleanup function
+    return () => {
+      clearInterval(intervalId);
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.close();
+      }
+    };
   }, []);
 
   // Function to get a link to a generic block explorer (user can adapt URL)
@@ -84,6 +128,18 @@ const IncidentsPage = () => {
         </h1>
         <p className="text-zinc-400 mt-2">
           Real-time feed of security incidents logged on the blockchain.
+          <span className={`ml-4 inline-flex items-center text-xs font-medium px-2.5 py-0.5 rounded-full ${
+            wsStatus === 'connected' ? 'bg-green-900/50 text-green-300' :
+            wsStatus === 'connecting' ? 'bg-yellow-900/50 text-yellow-300' :
+            'bg-red-900/50 text-red-300'
+          }`}>
+            <span className={`w-2 h-2 mr-1.5 rounded-full ${
+              wsStatus === 'connected' ? 'bg-green-500' :
+              wsStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' :
+              'bg-red-500'
+            }`}></span>
+            {wsStatus.charAt(0).toUpperCase() + wsStatus.slice(1)}
+          </span>
           {lastUpdated && (
             <span className="block text-xs mt-1">
               Last updated: {lastUpdated.toLocaleTimeString()}
