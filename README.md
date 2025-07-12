@@ -76,6 +76,26 @@ ZeroHack addresses today’s cyberattack landscape through:
 
 ---
 
+## 📸 Application Screenshots
+
+### Dashboard Overview
+![image1](image1)
+*Comprehensive dashboard displaying real-time threat detection statistics, system activity monitoring, and security alerts. Shows key metrics including detected threats, blocked connections, and overall system health status.*
+
+### Packet Analysis View
+![image2](image2)
+*Advanced packet analysis interface showcasing captured network packets with detailed protocol information. Features deep packet inspection capabilities, protocol breakdown, and real-time traffic monitoring.*
+
+### AI Threat Detection Pipeline
+![image3](image3)
+*AI-powered threat detection system in action, demonstrating the detection of SQL injection attacks with feature importance analysis. Displays the machine learning model's decision-making process and confidence scores.*
+
+### Blockchain Forensics
+![image4](image4)
+*Immutable blockchain logging system powered by Hyperledger, showing tamper-proof transaction records and forensic audit trails. Demonstrates secure incident logging and verification capabilities.*
+
+---
+
 ## 🚀 Future Scope
 
 - **Self-Healing Infrastructure:** Auto-recovery and isolation during incidents.
