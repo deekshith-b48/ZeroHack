@@ -214,16 +214,30 @@ class IsolationForestDetector:
         self.scaler_path = scaler_path
         self.model = None
         self.scaler = None
+        self.model_last_loaded_time = 0
         self._load_model()
+
+    def _check_and_reload_model(self):
+        """Checks if the model file has been updated and reloads it if so."""
+        try:
+            current_mod_time = os.path.getmtime(self.model_path)
+            if current_mod_time > self.model_last_loaded_time:
+                logger.info("IF Detector: Model file has changed. Reloading...")
+                self._load_model()
+        except OSError:
+            # File might not exist yet or other OS error
+            logger.debug(f"IF Detector: Could not check modification time for {self.model_path}.")
+            pass # Fail gracefully, predict will handle the None model
 
     def _load_model(self):
         if not os.path.exists(self.model_path) or not os.path.exists(self.scaler_path):
-            logger.error(f"IF Detector: Model ({self.model_path}) or scaler ({self.scaler_path}) not found.")
+            logger.warning(f"IF Detector: Model ({self.model_path}) or scaler ({self.scaler_path}) not found.")
             # Allow initialization, but predict will fail or return error
             return
         try:
             self.model = joblib.load(self.model_path)
             self.scaler = joblib.load(self.scaler_path)
+            self.model_last_loaded_time = os.path.getmtime(self.model_path)
             logger.info(f"IF Detector: Model and scaler loaded successfully from {self.model_path} and {self.scaler_path}")
         except Exception as e:
             logger.error(f"IF Detector: Error loading model or scaler: {e}")
@@ -242,6 +256,8 @@ class IsolationForestDetector:
             dict: {'verdict': 'normal'/'anomaly', 'score': float, 'explanation': str}
                   Returns None or error dict if model/scaler not loaded or prediction fails.
         """
+        self._check_and_reload_model() # Check for model updates before predicting
+
         if self.model is None or self.scaler is None:
             logger.error("IF Detector: Model or scaler not loaded. Cannot predict.")
             return {"verdict": "error", "score": 0.0, "explanation": "Model/scaler not loaded."}
