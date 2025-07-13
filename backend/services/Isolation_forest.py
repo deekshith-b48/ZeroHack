@@ -28,7 +28,7 @@ def preprocess_normal_data(filepath, scaler_save_path, processed_save_path):
     except FileNotFoundError:
         logger.error(f"File not found: {filepath}")
         return None, None
-    
+
     # Keep only numeric columns
     df_numeric = df.select_dtypes(include=[np.number])
     if df_numeric.empty:
@@ -62,7 +62,7 @@ def preprocess_normal_data(filepath, scaler_save_path, processed_save_path):
     except Exception as e:
         logger.error(f"Error saving scaler to {scaler_save_path}: {e}")
         return X_scaled, None # Return X_scaled even if scaler saving fails, but None for scaler
-    
+
     return X_scaled, scaler
 
 # ------------------ Train Isolation Forest ------------------

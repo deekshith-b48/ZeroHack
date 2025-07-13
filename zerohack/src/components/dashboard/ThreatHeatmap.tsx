@@ -38,30 +38,44 @@ export function ThreatHeatmap({
   const [error, setError] = useState<string | null>(null);
   const [zoomLevel, setZoomLevel] = useState<number>(1);
 
-  // Generate mock data if none provided
+  // Fetch data from API
   useEffect(() => {
     if (!initialData) {
-      setLoading(true);
-      try {
-        // Generate random threat points
-        const mockData: ThreatPoint[] = Array.from({ length: 200 }, (_, i) => ({
-          x: Math.random() * width,
-          y: Math.random() * height,
-          value: Math.random() * 100,
-          id: `threat-${i}`,
-          description: `Potential ${Math.random() > 0.7 ? 'Critical' : Math.random() > 0.4 ? 'Medium' : 'Low'} Security Threat`,
-          location: ['Network Perimeter', 'Internal Network', 'Database Server', 'Web Application', 'User Endpoint'][Math.floor(Math.random() * 5)],
-          timestamp: new Date(Date.now() - Math.random() * 86400000 * 7).toISOString(),
-          type: ['Intrusion Attempt', 'Data Exfiltration', 'Malware', 'DDoS', 'Phishing'][Math.floor(Math.random() * 5)]
-        }));
-        
-        setData(mockData);
-      } catch (err) {
-        setError('Failed to generate heatmap data');
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
+      const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8008';
+      const INCIDENTS_ENDPOINT = `${API_BASE_URL}/api/incidents`;
+
+      const fetchHeatmapData = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+          const response = await fetch(INCIDENTS_ENDPOINT);
+          if (!response.ok) throw new Error("Failed to fetch heatmap data");
+          const incidents = await response.json();
+
+          // Map incident data to ThreatPoint data for the heatmap.
+          // This requires mapping IP to an x/y coordinate.
+          // This is a placeholder and would need a proper IP-to-geo or network mapping service.
+          const mappedData = incidents.map((inc: any, i: number) => ({
+            x: (parseInt(inc.sourceIP.split('.')[2]) % width) || Math.random() * width, // Simple, non-realistic mapping
+            y: (parseInt(inc.sourceIP.split('.')[3]) % height) || Math.random() * height,
+            value: (inc.confidence || 0.5) * 100,
+            id: `threat-${i}-${inc.txHash}`,
+            description: inc.explanation,
+            threatLocation: inc.sourceIP,
+            timestamp: inc.timestamp,
+            type: inc.attackType,
+          }));
+
+          setData(mappedData);
+        } catch (err) {
+          setError(err.message);
+          console.error(err);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      fetchHeatmapData();
     }
   }, [initialData, width, height]);
 
