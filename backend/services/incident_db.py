@@ -160,6 +160,35 @@ def get_recent_incidents(limit: int = 100) -> List[dict]:
         if conn:
             conn.close()
 
+def get_incidents_by_ip(ip_address: str, limit: int = 10) -> List[dict]:
+    """Fetches the most recent incidents for a specific IP address."""
+    conn = None
+    incidents_list = []
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        query = """
+            SELECT * FROM incidents
+            WHERE source_ip = ?
+            ORDER BY detection_timestamp DESC
+            LIMIT ?
+        """
+        cursor.execute(query, (ip_address, limit))
+        rows = cursor.fetchall()
+        for row in rows:
+            incident = dict(row)
+            if incident.get('layer_outputs_json'):
+                incident['layer_outputs'] = json.loads(incident['layer_outputs_json'])
+            incidents_list.append(incident)
+        return incidents_list
+    except sqlite3.Error as e:
+        logger.error(f"SQLite error fetching incidents for IP {ip_address}: {e}", exc_info=True)
+        return []
+    finally:
+        if conn:
+            conn.close()
+
 
 # Initialize the database and table when this module is first imported or run.
 # This ensures the DB exists before other parts of the application try to use it.

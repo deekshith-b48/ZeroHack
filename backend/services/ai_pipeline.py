@@ -4,14 +4,16 @@ import time # For performance timing
 import uuid # For generating unique incident IDs
 
 # Import detector classes and engines
+# These imports assume the backend's parent directory is on the PYTHONPATH,
+# or that the app is run from the project root.
 from Isolation_forest import IsolationForestDetector
 from autoencoder_train_test import AutoencoderDetector
 from lstm_train_test import LSTMDETector
 from signature_engine import SignatureEngine
 from aggregator import Aggregator
-from backend.blockchain_response_engine import report_incident as report_incident_to_chain
-from backend.ipfs_uploader import upload_incident_details_to_ipfs
-from backend.incident_db import add_incident as add_incident_to_db, init_db as init_incident_db # Import DB functions
+from backend.services.blockchain_response_engine import report_incident as report_incident_to_chain
+from backend.services.ipfs_uploader import upload_incident_details_to_ipfs
+from backend.services.incident_db import add_incident as add_incident_to_db, init_db as init_incident_db
 
 import config
 
