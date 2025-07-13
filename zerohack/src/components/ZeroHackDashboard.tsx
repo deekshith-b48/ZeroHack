@@ -20,6 +20,13 @@ import { SystemStatus, mockWebSocketService } from '@/lib/websocket';
 import { motion } from 'framer-motion';
 import { PipelineStatus } from '@/components/ai-pipeline/PipelineStatus';
 
+// Configuration for API and WebSocket endpoints
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8008';
+const WS_BASE_URL = API_BASE_URL.replace(/^http/, 'ws');
+const STATUS_ENDPOINT = `${API_BASE_URL}/api/status`;
+const ALERTS_WEBSOCKET_ENDPOINT = `${WS_BASE_URL}/ws/alerts`;
+
+
 export default function ZeroHackDashboard() {
   const [activeTab, setActiveTab] = useState('ai-pipeline');
   const [systemStatus, setSystemStatus] = useState<SystemStatus>({
@@ -57,31 +64,80 @@ export default function ZeroHackDashboard() {
     },
   ];
 
-  // Initialize WebSocket mock service
+  // Fetch initial status and connect to WebSocket for real-time updates
   useEffect(() => {
-    mockWebSocketService.start();
-    
-    return () => {
-      mockWebSocketService.stop();
-    };
-  }, []);
+    // Fetch initial system status
+    const fetchStatus = async () => {
+      try {
+        const response = await fetch(STATUS_ENDPOINT);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
 
-  // Subscribe to system status updates
-  useEffect(() => {
-    const unsubscribe = mockWebSocketService.subscribe('system_status', (data: SystemStatus) => {
-      setSystemStatus({
-        processesMonitored: data.processesMonitored,
-        threatsDetected: data.threatsDetected,
-        filesScanned: data.filesScanned,
-        quarantinedItems: data.quarantinedItems,
-        cpuUsage: data.cpuUsage,
-        memoryUsage: data.memoryUsage,
-        isLearningMode: data.isLearningMode,
-        lastUpdateTimestamp: data.lastUpdateTimestamp,
-      });
-    });
-    
-    return unsubscribe;
+        // Here we need to map the /api/status response to the SystemStatus state
+        // This requires knowing the structure of the /api/status response
+        // For now, let's assume a partial mapping.
+        setSystemStatus(prevStatus => ({
+          ...prevStatus,
+          // Example mapping, adjust based on actual API response
+          // ai_model_status: data.ai_model,
+          // blockchain_connection: data.blockchain,
+          // active_ws_clients: data.active_ws_clients
+        }));
+        console.log("Fetched initial status:", data);
+      } catch (error) {
+        console.error("Failed to fetch initial system status:", error);
+      }
+    };
+
+    fetchStatus();
+
+    // Establish WebSocket connection
+    const ws = new WebSocket(ALERTS_WEBSOCKET_ENDPOINT);
+
+    ws.onopen = () => {
+      console.log("Dashboard WebSocket connected.");
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const messageData = JSON.parse(event.data);
+        console.log("Dashboard received WebSocket message:", messageData);
+
+        // Update dashboard based on message type
+        // This part needs to be built out. For example, if we get a new threat alert,
+        // we might increment the threatsDetected count.
+        if (messageData.event_type === 'IPQuarantined' || messageData.event_type === 'AdminAlert') {
+          setSystemStatus(prevStatus => ({
+            ...prevStatus,
+            threatsDetected: prevStatus.threatsDetected + 1,
+            // quarantinedItems could also be updated if we get that info
+            lastUpdateTimestamp: new Date().toISOString(),
+          }));
+        }
+        // A 'system_status' type message could update everything at once
+        if (messageData.event_type === 'system_status') {
+             setSystemStatus(messageData.data);
+        }
+
+      } catch (e) {
+        console.error("Error parsing WebSocket message in dashboard:", e);
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error("Dashboard WebSocket error:", error);
+    };
+
+    ws.onclose = () => {
+      console.log("Dashboard WebSocket closed.");
+    };
+
+    // Cleanup on component unmount
+    return () => {
+      ws.close();
+    };
   }, []);
 
   const renderActiveTab = () => {

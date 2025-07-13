@@ -513,146 +513,55 @@ export function ThreatMap() {
   };
   
   useEffect(() => {
-    // Simulate loading threat data - in a real app this would come from an API with WebSockets
-    const mockThreats: ThreatLocation[] = [
-      {
-        id: 1,
-        latitude: 37.7749,
-        longitude: -122.4194,
-        country: 'United States',
-        city: 'San Francisco',
-        ipAddress: '192.168.1.1',
-        threatType: 'Brute Force Attack',
-        severity: 'medium',
-        timestamp: '2023-05-16 14:23:45',
-        magnitude: 35,
-        protocol: 'SSH',
-        port: 22,
-        asn: 'AS13414',
-        connectionCount: 543,
-        targetIndustry: 'Technology',
-        attackVector: 'Password Spray',
-        confidence: 86,
-        mitreTactic: 'Initial Access',
-        enrichedData: {
-          orgName: 'Example ISP',
-          isp: 'Example Network',
-          firstSeen: '2023-05-10',
-          lastSeen: '2023-05-16',
-          tags: ['SSH Scanner', 'Known Proxy'],
-          reputation: 35
-        },
-        relatedEvents: [
-          { id: 101, type: 'Login Failure', timestamp: '2023-05-16 14:20:12' },
-          { id: 102, type: 'Access Attempt', timestamp: '2023-05-16 14:22:30' }
-        ],
-        shapExplanation: {
-          features: [
-            { name: 'Failed Login Count', value: 543, importance: 0.45 },
-            { name: 'Source Reputation', value: 35, importance: 0.25 },
-            { name: 'Time Pattern', value: 0.85, importance: 0.15 },
-            { name: 'Payload Entropy', value: 0.72, importance: 0.10 }
-          ]
-        }
-      },
-      {
-        id: 2,
-        latitude: 51.5074,
-        longitude: -0.1278,
-        country: 'United Kingdom',
-        city: 'London',
-        ipAddress: '10.0.0.1',
-        threatType: 'Data Exfiltration',
-        severity: 'high',
-        timestamp: '2023-05-16 13:12:30',
-        magnitude: 65,
-      },
-      {
-        id: 3,
-        latitude: 35.6762,
-        longitude: 139.6503,
-        country: 'Japan',
-        city: 'Tokyo',
-        ipAddress: '172.16.0.1',
-        threatType: 'Malware C2',
-        severity: 'high',
-        timestamp: '2023-05-16 12:45:12',
-        magnitude: 80,
-      },
-      {
-        id: 4,
-        latitude: 55.7558,
-        longitude: 37.6173,
-        country: 'Russia',
-        city: 'Moscow',
-        ipAddress: '192.168.0.1',
-        threatType: 'Port Scanning',
-        severity: 'low',
-        timestamp: '2023-05-16 11:03:22',
-        magnitude: 25,
-      },
-      {
-        id: 5,
-        latitude: -33.8688,
-        longitude: 151.2093,
-        country: 'Australia',
-        city: 'Sydney',
-        ipAddress: '10.0.0.2',
-        threatType: 'DDoS Attack',
-        severity: 'medium',
-        timestamp: '2023-05-16 10:34:18',
-        magnitude: 50,
-      },
-      {
-        id: 6,
-        latitude: 48.8566,
-        longitude: 2.3522,
-        country: 'France',
-        city: 'Paris',
-        ipAddress: '192.168.2.5',
-        threatType: 'SQL Injection',
-        severity: 'high',
-        timestamp: '2023-05-16 09:15:33',
-        magnitude: 70,
-      },
-      {
-        id: 7,
-        latitude: 19.4326,
-        longitude: -99.1332,
-        country: 'Mexico',
-        city: 'Mexico City',
-        ipAddress: '172.16.5.10',
-        threatType: 'XSS Attack',
-        severity: 'medium',
-        timestamp: '2023-05-16 08:45:22',
-        magnitude: 40,
-      },
-      {
-        id: 8,
-        latitude: -22.9068,
-        longitude: -43.1729,
-        country: 'Brazil',
-        city: 'Rio de Janeiro',
-        ipAddress: '10.1.5.22',
-        threatType: 'Ransomware',
-        severity: 'high',
-        timestamp: '2023-05-16 07:33:11',
-        magnitude: 90,
-      }
-    ];
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8008';
+    const INCIDENTS_ENDPOINT = `${API_BASE_URL}/api/incidents`;
 
-    setThreats(mockThreats);
+    const fetchThreats = async () => {
+      setLoading(true);
+      try {
+        const response = await fetch(INCIDENTS_ENDPOINT);
+        if (!response.ok) throw new Error("Failed to fetch incidents");
+        const data = await response.json();
 
-    // Calculate threat categories for the legend
-    const categories: Record<string, number> = {};
-    mockThreats.forEach(threat => {
-      if (categories[threat.threatType]) {
-        categories[threat.threatType]++;
-      } else {
-        categories[threat.threatType] = 1;
+        // Map API response to ThreatLocation interface
+        // NOTE: This requires a way to get lat/long from an IP.
+        // For now, we'll assign random coordinates as a placeholder.
+        const mappedThreats = data.map((inc: any, index: number) => ({
+          id: index,
+          latitude: Math.random() * 180 - 90,
+          longitude: Math.random() * 360 - 180,
+          country: 'Unknown', // Placeholder, needs IP geolocation
+          city: 'Unknown', // Placeholder
+          ipAddress: inc.sourceIP,
+          threatType: inc.attackType,
+          severity: inc.confidence > 0.7 ? 'high' : inc.confidence > 0.4 ? 'medium' : 'low',
+          timestamp: inc.timestamp,
+          magnitude: (inc.confidence || 0.5) * 100,
+          description: inc.explanation,
+        }));
+
+        setThreats(mappedThreats);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
       }
-    });
-    setThreatCategories(categories);
+    };
+
+    fetchThreats();
+
+    const WS_BASE_URL = API_BASE_URL.replace(/^http/, 'ws');
+    const ALERTS_WEBSOCKET_ENDPOINT = `${WS_BASE_URL}/ws/alerts`;
+
+    const ws = new WebSocket(ALERTS_WEBSOCKET_ENDPOINT);
+
+    ws.onmessage = (event) => {
+      const messageData = JSON.parse(event.data);
+      if (messageData.event_type === 'IPQuarantined' || messageData.event_type === 'AdminAlert') {
+        // A new threat has been detected and logged. Re-fetch the incidents.
+        fetchThreats();
+      }
+    };
 
     // Load world map data
     fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json')
