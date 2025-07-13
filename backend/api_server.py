@@ -6,9 +6,9 @@ import logging
 # Import routers
 from backend.routers import traffic, incidents, system, websocket, dao
 # Import services and helpers for startup tasks
-from backend.services.blockchain_logger import connect_and_load_contract as connect_logger_contract
-from backend.services.blockchain_response_engine import connect_and_load_contract as connect_response_contract, response_contract_instance
-from backend.services.dao_interactor import connect_and_load_dao_contract
+from backend.services.blockchain_logger import connect_and_load_contract as connect_logger_contract, is_connected_and_configured as is_logger_connected
+from backend.services.blockchain_response_engine import connect_and_load_contract as connect_response_contract, response_contract_instance, is_connected_and_configured as is_response_engine_connected
+from backend.services.dao_interactor import connect_and_load_dao_contract, dao_is_connected_and_configured
 from backend.services.ai_pipeline import get_pipeline
 from backend.services.ws_broadcaster import manager as ws_manager
 import config
@@ -52,7 +52,7 @@ async def event_listener_background_task():
 app = FastAPI(
     title="ZeroHack API",
     description="API for ZeroHack cybersecurity application, including incident reporting, feedback, DAO interactions, and analytics.",
-    version="0.2.0"
+    version="0.3.0" # Version bump for new architecture
 )
 
 # --- CORS Middleware ---
@@ -74,11 +74,15 @@ async def startup_event():
     asyncio.create_task(event_listener_background_task())
 
 # --- Include Routers ---
-app.include_router(traffic.router)
-app.include_router(incidents.router)
-app.include_router(system.router)
-app.include_router(websocket.router)
-app.include_router(dao.router)
+app.include_router(traffic.router, tags=["Traffic Analysis"])
+app.include_router(incidents.router, tags=["Incidents & Verdicts"])
+app.include_router(system.router, tags=["System Status"])
+app.include_router(websocket.router, tags=["WebSockets"])
+app.include_router(dao.router, tags=["DAO"])
+# The feedback and analytics routers were not created yet, so they are commented out.
+# app.include_router(feedback.router, tags=["Feedback"])
+# app.include_router(analytics.router, tags=["Analytics"])
+
 
 if __name__ == "__main__":
     import uvicorn
