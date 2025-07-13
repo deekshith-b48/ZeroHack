@@ -262,6 +262,7 @@ class LSTMDETector:
         self.model = None
         self.scaler = None
         self.threshold = None # Actual MSE value threshold
+        self.model_last_loaded_time = 0
         self._load_model_and_scaler()
 
         if threshold_percentile is not None:
@@ -272,14 +273,25 @@ class LSTMDETector:
             self.threshold_percentile_dynamic = config.DETECTOR_DYNAMIC_THRESHOLD_PERCENTILE
             logger.info(f"LSTM Detector: Defaulting to dynamic threshold calculation at {self.threshold_percentile_dynamic}th percentile if not set otherwise.")
 
+    def _check_and_reload_model(self):
+        """Checks if the model file has been updated and reloads it if so."""
+        try:
+            current_mod_time = os.path.getmtime(self.model_path)
+            if current_mod_time > self.model_last_loaded_time:
+                logger.info("LSTM Detector: Model file has changed. Reloading...")
+                self._load_model_and_scaler()
+        except OSError:
+            logger.debug(f"LSTM Detector: Could not check modification time for {self.model_path}.")
+            pass
 
     def _load_model_and_scaler(self):
         if not os.path.exists(self.model_path) or not os.path.exists(self.scaler_path):
-            logger.error(f"LSTM Detector: Model ({self.model_path}) or scaler ({self.scaler_path}) not found.")
+            logger.warning(f"LSTM Detector: Model ({self.model_path}) or scaler ({self.scaler_path}) not found.")
             return
         try:
             self.model = tf.keras.models.load_model(self.model_path)
             self.scaler = joblib.load(self.scaler_path)
+            self.model_last_loaded_time = os.path.getmtime(self.model_path)
             logger.info(f"LSTM Detector: Model and scaler loaded successfully from {self.model_path} and {self.scaler_path}")
             # Potentially load a pre-calculated MSE threshold here too
             # e.g., self.threshold = joblib.load(os.path.join(config.MODELS_DIR, "lstm_mse_threshold.pkl"))
@@ -304,6 +316,8 @@ class LSTMDETector:
         Returns:
             dict: {'verdict': 'normal'/'anomaly', 'score': mse_value (float), 'explanation': str, 'model_type': 'LSTM'}
         """
+        self._check_and_reload_model()
+
         if self.model is None or self.scaler is None:
             logger.error("LSTM Detector: Model or scaler not loaded.")
             return {"verdict": "error", "score": 0.0, "explanation": "LSTM Model/scaler not loaded.", "model_type": "LSTM"}
