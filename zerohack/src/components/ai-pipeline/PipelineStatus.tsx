@@ -26,6 +26,10 @@ import {
   PipelineComponent
 } from '@/lib/ai-pipeline';
 
+// Configuration for API endpoint
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8008';
+const ANALYZE_ENDPOINT = `${API_BASE_URL}/api/analyze`;
+
 interface PipelineStatusProps {
   initialConfig?: Partial<PipelineConfig>;
 }
@@ -130,21 +134,63 @@ export function PipelineStatus({ initialConfig = {} }: PipelineStatusProps) {
     }
   };
   
-  // Run full pipeline analysis
-  const runFullAnalysis = async () => {
+  // Analyze traffic by sending it to the backend pipeline
+  const analyzeTraffic = async () => {
     setIsAnalyzing(true);
     
     try {
-      const data: any = {};
-      if (textInput) data.text = textInput;
-      if (imageInput) data.image = imageInput;
-      if (networkInput) data.networkData = JSON.parse(networkInput);
+      // The backend expects a list of traffic events.
+      // We will construct a single event from the available network data.
+      // This is a simplified mapping.
+      if (!networkInput) {
+        console.warn("No network data to analyze.");
+        setIsAnalyzing(false);
+        return;
+      }
       
-      const result = await pipeline.analyzeAll(data);
-      setResults(result);
-      setPerformanceMetrics(pipeline.getPerformanceMetrics());
+      const networkData = JSON.parse(networkInput);
+      const event = {
+        timestamp: new Date().toISOString(),
+        source_ip: networkData.source_ip || "N/A",
+        dest_ip: networkData.destination_ip || "N/A",
+        dest_port: networkData.destination_port || 0,
+        ...networkData // Pass all other fields from the network input
+      };
+
+      const response = await fetch(ANALYZE_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ events: [event] })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || `API error: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log("Backend Analysis Result:", result);
+
+      // We need a state to hold this backend result to display it.
+      // For now, we'll just log it. A new state `[backendAnalysis, setBackendAnalysis]` would be needed.
+      // Example of mapping it to the existing `results` state for partial display:
+      const threatDetected = result.final_verdict === 'THREAT';
+      const explanation = result.explanation_summary;
+      const confidence = result.confidence;
+
+      setResults(prev => ({
+        ...prev,
+        network: { // Update the network result tab with backend data
+          threatDetected,
+          threatType: threatDetected ? result.layer_outputs.find(l => l.rule_id)?.rule_id || 'Aggregated Threat' : 'N/A',
+          confidence,
+          explanation,
+          shapValues: null // SHAP values are not returned by this API structure
+        }
+      }));
+
     } catch (error) {
-      console.error('Full analysis error:', error);
+      console.error('Backend analysis error:', error);
     } finally {
       setIsAnalyzing(false);
     }
@@ -777,18 +823,18 @@ export function PipelineStatus({ initialConfig = {} }: PipelineStatusProps) {
       <div className="border-t border-zinc-800 p-4">
         <button
           className="w-full bg-emerald-600 hover:bg-emerald-700 py-3 rounded-lg flex items-center justify-center"
-          onClick={runFullAnalysis}
+          onClick={analyzeTraffic}
           disabled={isAnalyzing || (!textInput && !imageInput && !networkInput)}
         >
           {isAnalyzing ? (
             <>
               <RefreshCw size={18} className="mr-2 animate-spin" />
-              Running Full Pipeline Analysis...
+              Analyzing with Backend...
             </>
           ) : (
             <>
               <Shield size={18} className="mr-2" />
-              Run Full Pipeline Analysis
+              Analyze with Backend Pipeline
             </>
           )}
         </button>

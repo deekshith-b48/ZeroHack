@@ -11,6 +11,10 @@ import {
   PacketAIModel
 } from '@/lib/packet-analyzer';
 import { LanguageAnalyzer } from './LanguageAnalyzer';
+
+// Configuration for API endpoint
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8008';
+const ANALYZE_ENDPOINT = `${API_BASE_URL}/api/analyze`;
 import { StealthDetector } from './StealthDetector';
 import { ProtocolAnalyzer } from './ProtocolAnalyzer';
 
@@ -122,8 +126,54 @@ export default function PacketAnalyzerDashboard() {
         averageLatency: Math.floor(80 + Math.random() * 90)
       }));
       
-      const result = await analyzePacketWithAI(packet, aiModel);
-      setPacketAnalysis(result);
+      // The old way used a mock function. New way calls the backend API.
+      // const result = await analyzePacketWithAI(packet, aiModel);
+
+      // The /api/analyze endpoint expects a list of events.
+      // We will send a single packet as a session of one event.
+      // The `payload` needs to be serializable, so we convert Uint8Array to an array of numbers.
+      const serializablePacket = {
+        ...packet,
+        payload: Array.from(packet.payload), // Convert Uint8Array to number array
+        timestamp: packet.timestamp.toISOString(), // Convert Date to ISO string
+      };
+
+      const response = await fetch(ANALYZE_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ events: [serializablePacket] })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || `API error: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      // The backend response is the aggregator's result. We need to map it
+      // to the frontend's `AnalysisResult` interface.
+      // This is a placeholder mapping.
+      const mappedResult: AnalysisResult = {
+        packetId: packet.id,
+        threatScore: result.confidence * 100, // Convert 0-1 confidence to 0-100 score
+        classification: result.final_verdict === 'THREAT' ? 'malicious' : 'benign',
+        // The other fields (detectedLanguages, etc.) are not directly provided by the
+        // current aggregator response and would require more detailed parsing of layer_outputs.
+        // For now, we'll leave them empty.
+        detectedLanguages: [],
+        detectedSteganography: [],
+        protocolAnalysis: {
+            protocolName: packet.protocol,
+            isValid: true,
+            anomalies: [],
+            structuralAnalysis: {}
+        },
+        aiAnalysis: result.explanation_summary,
+        confidence: result.confidence,
+      };
+
+      setPacketAnalysis(mappedResult);
       
       const endTime = performance.now();
       setProcessingTime(Math.round(endTime - startTime));

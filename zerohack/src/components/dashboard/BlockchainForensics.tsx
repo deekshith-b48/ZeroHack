@@ -62,7 +62,57 @@ export function BlockchainForensics() {
   const [showIPFSDetails, setShowIPFSDetails] = useState(false);
 
   useEffect(() => {
-    // Simulate loading blockchain records with enhanced fields
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8008';
+    const INCIDENTS_ENDPOINT = `${API_BASE_URL}/api/incidents`;
+
+    const fetchBlockchainRecords = async () => {
+      try {
+        const response = await fetch(INCIDENTS_ENDPOINT);
+        if (!response.ok) {
+          throw new Error("Failed to fetch blockchain records");
+        }
+        const data = await response.json();
+
+        // Map the API response to the component's BlockchainRecord interface
+        const mappedRecords = data.map((inc: any, index: number): BlockchainRecord => ({
+          id: index + 1,
+          timestamp: new Date(inc.timestamp).toLocaleString(),
+          alertHash: inc.txHash.substring(0, 32) + '...', // Use txHash as a base for alertHash
+          process: inc.attackType, // Use attackType as process for now
+          user: inc.sourceIP, // Use sourceIP as user
+          status: 'verified', // Assume verified for now
+          blockHeight: inc.blockNumber,
+          txHash: inc.txHash,
+          ipfsCid: inc.ipfsHash,
+          threatType: inc.attackType,
+          confirmations: 12, // Placeholder
+          channelId: 'main-forensic-channel', // Placeholder
+          // Merkle proof and forensic evidence would need to be enriched by another service
+          // or attached to the IPFS log.
+          merkleProof: {
+            siblingHashes: ['a1b2c3...'],
+            path: [1,0],
+            verified: true
+          },
+          forensicEvidence: inc.ipfsHash ? [{
+            type: 'logs',
+            size: 'N/A',
+            timestamp: new Date(inc.timestamp).toLocaleString(),
+            ipfsStatus: 'stored'
+          }] : []
+        }));
+
+        setRecords(mappedRecords);
+      } catch (error) {
+        console.error("Error fetching blockchain forensics:", error);
+        // Keep mock data on error for demo purposes, or set an error state
+      }
+    };
+
+    fetchBlockchainRecords();
+
+    // The original mock data can be removed or kept as a fallback.
+    // For now, I'll keep it so the component still displays something if the API call fails.
     const mockRecords: BlockchainRecord[] = [
       {
         id: 1,
