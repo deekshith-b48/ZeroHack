@@ -1,0 +1,5 @@
+# This directory is for storing trained model versions.
+# For example:
+# ml/models/v1/isolation_forest.pkl
+# ml/models/v2/isolation_forest.pkl
+# ml/models/current -> symlink to v2

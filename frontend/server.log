@@ -1,0 +1,22 @@
+
+> creatr@0.1.0 dev
+> next dev
+
+ ⚠ Port 3000 is in use, using available port 3001 instead.
+   ▲ Next.js 15.3.2
+   - Local:        http://localhost:3001
+   - Network:      http://172.16.189.121:3001
+
+ ✓ Starting...
+Warning: Reverting webpack devtool to 'false'.
+Changing the webpack devtool in development mode will cause severe performance regressions.
+Read more: https://nextjs.org/docs/messages/improper-devtool
+ ✓ Ready in 7.5s
+ ○ Compiling / ...
+ ✓ Compiled / in 6s (3304 modules)
+ GET / 200 in 6842ms
+ ✓ Compiled in 5.7s (3318 modules)
+ ✓ Compiled in 2.9s (3318 modules)
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename '/home/deekshi484/Documents/zerohack/frontend/.next/cache/webpack/server-development/3.pack.gz_' -> '/home/deekshi484/Documents/zerohack/frontend/.next/cache/webpack/server-development/3.pack.gz'
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename '/home/deekshi484/Documents/zerohack/frontend/.next/cache/webpack/client-development/6.pack.gz_' -> '/home/deekshi484/Documents/zerohack/frontend/.next/cache/webpack/client-development/6.pack.gz'
+[?25h
