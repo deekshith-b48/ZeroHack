@@ -363,10 +363,6 @@ class ApiClient {
     return this.request<any[]>('/api/network/packets');
   }
 
-  async getThreatHeatmapData(): Promise<ApiResponse<any[]>> {
-    return this.request<any[]>('/api/threats/heatmap');
-  }
-
   // Health check
   async healthCheck(): Promise<ApiResponse<any>> {
     return this.request('/health');

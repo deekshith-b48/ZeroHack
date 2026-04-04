@@ -5,6 +5,7 @@ Handles ML model loading, inference, and management.
 
 import asyncio
 import logging
+import os
 from typing import Dict, List, Any, Optional, Union
 import numpy as np
 import pandas as pd

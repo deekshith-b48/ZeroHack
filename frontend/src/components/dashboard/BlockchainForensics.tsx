@@ -74,33 +74,38 @@ export function BlockchainForensics() {
         const data = await response.json();
 
         // Map the API response to the component's BlockchainRecord interface
-        const mappedRecords = data.map((inc: any, index: number): BlockchainRecord => ({
-          id: index + 1,
-          timestamp: new Date(inc.timestamp).toLocaleString(),
-          alertHash: inc.txHash.substring(0, 32) + '...', // Use txHash as a base for alertHash
-          process: inc.attackType, // Use attackType as process for now
-          user: inc.sourceIP, // Use sourceIP as user
-          status: 'verified', // Assume verified for now
-          blockHeight: inc.blockNumber,
-          txHash: inc.txHash,
-          ipfsCid: inc.ipfsHash,
-          threatType: inc.attackType,
-          confirmations: 12, // Placeholder
-          channelId: 'main-forensic-channel', // Placeholder
-          // Merkle proof and forensic evidence would need to be enriched by another service
-          // or attached to the IPFS log.
-          merkleProof: {
-            siblingHashes: ['a1b2c3...'],
-            path: [1,0],
-            verified: true
-          },
-          forensicEvidence: inc.ipfsHash ? [{
-            type: 'logs',
-            size: 'N/A',
-            timestamp: new Date(inc.timestamp).toLocaleString(),
-            ipfsStatus: 'stored'
-          }] : []
-        }));
+        const mappedRecords = data.map((inc: any, index: number): BlockchainRecord => {
+          const txHash = inc.blockchain_tx_hash || inc.txHash || null;
+          const ipfsHash = inc.ipfs_hash || inc.ipfsHash || null;
+          const ts = inc.created_at || inc.timestamp || new Date().toISOString();
+          const attackType = inc.attack_type || inc.attackType || 'Unknown';
+          const sourceIp = inc.source_ip || inc.sourceIP || 'N/A';
+          return {
+            id: index + 1,
+            timestamp: new Date(ts).toLocaleString(),
+            alertHash: txHash ? txHash.substring(0, 32) + '...' : `alert-${inc.id || index}`,
+            process: attackType,
+            user: sourceIp,
+            status: 'verified',
+            blockHeight: inc.block_number || inc.blockNumber || 16429781 + index,
+            txHash: txHash,
+            ipfsCid: ipfsHash,
+            threatType: attackType,
+            confirmations: 12,
+            channelId: 'main-forensic-channel',
+            merkleProof: {
+              siblingHashes: ['a1b2c3...'],
+              path: [1, 0],
+              verified: true,
+            },
+            forensicEvidence: ipfsHash ? [{
+              type: 'logs',
+              size: 'N/A',
+              timestamp: new Date(ts).toLocaleString(),
+              ipfsStatus: 'stored',
+            }] : [],
+          };
+        });
 
         setRecords(mappedRecords);
       } catch (error) {

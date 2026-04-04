@@ -126,66 +126,29 @@ export function ProcessMonitor() {
     }
   );
 
-  useEffect(() => {
-    // Simulate loading processes
-    const mockProcesses: Process[] = [
-      {
-        id: 1,
-        name: 'system.exe',
-        status: 'normal',
-        cpu: 2.4,
-        memory: 124.5,
-        path: 'C:\\Windows\\System32',
-        started: '2023-05-16 08:23:45',
-      },
-      {
-        id: 2,
-        name: 'browser.exe',
-        status: 'normal',
-        cpu: 15.7,
-        memory: 450.2,
-        path: 'C:\\Program Files\\Browser',
-        started: '2023-05-16 09:12:30',
-      },
-      {
-        id: 3,
-        name: 'suspicious_process.exe',
-        status: 'warning',
-        cpu: 45.2,
-        memory: 890.7,
-        path: 'C:\\Temp',
-        started: '2023-05-16 10:45:12',
-      },
-      {
-        id: 4,
-        name: 'malware.exe',
-        status: 'critical',
-        cpu: 87.5,
-        memory: 1240.3,
-        path: 'C:\\Users\\AppData\\Temp',
-        started: '2023-05-16 11:03:22',
-      },
-      {
-        id: 5,
-        name: 'explorer.exe',
-        status: 'normal',
-        cpu: 1.2,
-        memory: 85.6,
-        path: 'C:\\Windows',
-        started: '2023-05-16 08:00:15',
-      },
-      {
-        id: 6,
-        name: 'svchost.exe',
-        status: 'normal',
-        cpu: 0.8,
-        memory: 45.2,
-        path: 'C:\\Windows\\System32',
-        started: '2023-05-16 08:00:05',
-      },
-    ];
+  const fetchProcesses = async () => {
+    try {
+      const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8008';
+      const response = await fetch(`${API_BASE_URL}/api/processes`);
+      if (!response.ok) throw new Error('Failed to fetch processes');
+      const data = await response.json();
+      const mapped: Process[] = data.map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        status: p.cpu > 50 ? 'critical' : p.cpu > 20 ? 'warning' : 'normal',
+        cpu: p.cpu,
+        memory: parseFloat((p.memory).toFixed(1)),
+        path: p.path || 'N/A',
+        started: p.started || 'N/A',
+      }));
+      setProcesses(mapped);
+    } catch {
+      // keep existing processes on error
+    }
+  };
 
-    setProcesses(mockProcesses);
+  useEffect(() => {
+    fetchProcesses();
   }, []);
 
   const getStatusIcon = (status: string) => {
@@ -217,7 +180,7 @@ export function ProcessMonitor() {
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold">Process Monitor</h2>
         <div className="flex space-x-2">
-          <button className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-md">
+          <button className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-md" onClick={fetchProcesses}>
             Refresh
           </button>
           <button 

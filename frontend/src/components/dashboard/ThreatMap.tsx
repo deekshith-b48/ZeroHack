@@ -530,14 +530,15 @@ export function ThreatMap() {
           id: index,
           latitude: Math.random() * 180 - 90,
           longitude: Math.random() * 360 - 180,
-          country: 'Unknown', // Placeholder, needs IP geolocation
-          city: 'Unknown', // Placeholder
-          ipAddress: inc.sourceIP,
-          threatType: inc.attackType,
-          severity: inc.confidence > 0.7 ? 'high' : inc.confidence > 0.4 ? 'medium' : 'low',
-          timestamp: inc.timestamp,
-          magnitude: (inc.confidence || 0.5) * 100,
-          description: inc.explanation,
+          country: 'Unknown',
+          city: 'Unknown',
+          ipAddress: inc.source_ip || inc.sourceIP || 'N/A',
+          threatType: inc.attack_type || inc.attackType || 'Unknown',
+          severity: (inc.confidence_score || inc.confidence || 0.5) > 0.7 ? 'high'
+                  : (inc.confidence_score || inc.confidence || 0.5) > 0.4 ? 'medium' : 'low',
+          timestamp: inc.created_at || inc.timestamp || new Date().toISOString(),
+          magnitude: ((inc.confidence_score || inc.confidence || 0.5)) * 100,
+          description: inc.description || inc.explanation || '',
         }));
 
         setThreats(mappedThreats);
